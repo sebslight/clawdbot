@@ -39,7 +39,7 @@ Options:
 
 ## Service (background)
 
-Install a headless node host as a user service.
+Install a headless node host as a user service (add `--system` for a systemd system service on Linux).
 
 ```bash
 clawdbot node service install --host <gateway-host> --port 18790
@@ -56,6 +56,7 @@ Options:
 - `--display-name <name>`: Override the node display name
 - `--runtime <runtime>`: Service runtime (`node` or `bun`)
 - `--force`: Reinstall/overwrite if already installed
+- `--system`: Use a systemd system service on Linux (requires sudo)
 
 Manage the service:
 

@@ -13,6 +13,7 @@ import {
   resolveGatewaySystemdServiceName,
   resolveGatewayWindowsTaskName,
 } from "./constants.js";
+import { resolveSystemdScope, type SystemdScope } from "./systemd.js";
 
 export type ExtraGatewayService = {
   platform: "darwin" | "linux" | "win32";
@@ -28,9 +29,13 @@ export type FindExtraGatewayServicesOptions = {
 const EXTRA_MARKERS = ["clawdbot"];
 const execFileAsync = promisify(execFile);
 
-export function renderGatewayServiceCleanupHints(
-  env: Record<string, string | undefined> = process.env as Record<string, string | undefined>,
-): string[] {
+export function renderGatewayServiceCleanupHints(options: {
+  env?: Record<string, string | undefined>;
+  scope?: SystemdScope;
+} = {}): string[] {
+  const env =
+    options.env ?? (process.env as Record<string, string | undefined>);
+  const scope = options.scope ?? resolveSystemdScope(env);
   const profile = env.CLAWDBOT_PROFILE;
   switch (process.platform) {
     case "darwin": {
@@ -39,6 +44,12 @@ export function renderGatewayServiceCleanupHints(
     }
     case "linux": {
       const unit = resolveGatewaySystemdServiceName(profile);
+      if (scope === "system") {
+        return [
+          `sudo systemctl disable --now ${unit}.service`,
+          `sudo rm /etc/systemd/system/${unit}.service`,
+        ];
+      }
       return [
         `systemctl --user disable --now ${unit}.service`,
         `rm ~/.config/systemd/user/${unit}.service`,

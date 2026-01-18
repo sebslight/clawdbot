@@ -248,7 +248,9 @@ export async function maybeScanExtraGatewayServices(options: DoctorOptions) {
     "Other gateway-like services detected",
   );
 
-  const cleanupHints = renderGatewayServiceCleanupHints();
+  const cleanupHints = renderGatewayServiceCleanupHints({
+    env: process.env as Record<string, string | undefined>,
+  });
   if (cleanupHints.length > 0) {
     note(cleanupHints.map((hint) => `- ${hint}`).join("\n"), "Cleanup hints");
   }

@@ -20,6 +20,7 @@ export function renderSystemdUnavailableHints(options: { wsl?: boolean } = {}): 
   }
   return [
     "systemd user services are unavailable; install/enable systemd or run the gateway under your supervisor.",
+    "In containers or headless servers, install a system service: `clawdbot daemon install --system`.",
     "If you're in a container, run the gateway in the foreground instead of `clawdbot daemon`.",
   ];
 }

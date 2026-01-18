@@ -646,8 +646,9 @@ Notes:
 - `daemon status` also surfaces legacy or extra gateway services when it can detect them (`--deep` adds system-level scans). Profile-named Clawdbot services are treated as first-class and aren't flagged as "extra".
 - `daemon status` prints which config path the CLI uses vs which config the daemon likely uses (service env), plus the resolved probe target URL.
 - `daemon install|uninstall|start|stop|restart` support `--json` for scripting (default output stays human-friendly).
+- On Linux, add `--system` to manage a systemd **system** service (requires sudo).
 - `daemon install` defaults to Node runtime; bun is **not recommended** (WhatsApp/Telegram bugs).
-- `daemon install` options: `--port`, `--runtime`, `--token`, `--force`, `--json`.
+- `daemon install` options: `--port`, `--runtime`, `--token`, `--force`, `--system`, `--json`.
 
 ### `logs`
 Tail Gateway file logs via RPC.

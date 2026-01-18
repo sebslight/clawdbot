@@ -257,8 +257,15 @@ systemctl --user enable --now clawdbot-gateway[-<profile>].service
 
 **Alternative (system service)** - for always-on or multi-user servers, you can
 install a systemd **system** unit instead of a user unit (no lingering needed).
-Create `/etc/systemd/system/clawdbot-gateway[-<profile>].service` (copy the unit above,
-switch `WantedBy=multi-user.target`, set `User=` + `WorkingDirectory=`), then:
+Install via the CLI:
+```
+clawdbot daemon install --system
+# or:
+clawdbot service gateway install --system
+```
+
+Manual install: create `/etc/systemd/system/clawdbot-gateway[-<profile>].service` (copy the unit above,
+optionally switch `WantedBy=multi-user.target`, set `User=` + `WorkingDirectory=`), then:
 ```
 sudo systemctl daemon-reload
 sudo systemctl enable --now clawdbot-gateway[-<profile>].service

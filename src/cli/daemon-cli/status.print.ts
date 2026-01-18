@@ -9,6 +9,7 @@ import {
   isSystemdUnavailableDetail,
   renderSystemdUnavailableHints,
 } from "../../daemon/systemd-hints.js";
+import { resolveSystemdScope } from "../../daemon/systemd.js";
 import { isWSLEnv } from "../../infra/wsl.js";
 import { getResolvedLoggerSettings } from "../../logging.js";
 import { defaultRuntime } from "../../runtime.js";
@@ -148,6 +149,11 @@ export function printDaemonStatus(status: DaemonStatus, opts: { json: boolean })
     defaultRuntime.log(`${label("Runtime:")} ${colorize(rich, runtimeColor, runtimeLine)}`);
   }
 
+  const hintEnv = {
+    ...(service.command?.environment ?? (process.env as Record<string, string | undefined>)),
+    ...(service.systemdScope ? { CLAWDBOT_SYSTEMD_SCOPE: service.systemdScope } : {}),
+  } as NodeJS.ProcessEnv;
+
   if (rpc && !rpc.ok && service.loaded && service.runtime?.status === "running") {
     defaultRuntime.log(
       warnText("Warm-up: launch agents can take a few seconds. Try again shortly."),
@@ -170,7 +176,9 @@ export function printDaemonStatus(status: DaemonStatus, opts: { json: boolean })
   }
 
   const systemdUnavailable =
-    process.platform === "linux" && isSystemdUnavailableDetail(service.runtime?.detail);
+    process.platform === "linux" &&
+    resolveSystemdScope(hintEnv as Record<string, string | undefined>) === "user" &&
+    isSystemdUnavailableDetail(service.runtime?.detail);
   if (systemdUnavailable) {
     defaultRuntime.error(errorText("systemd user services unavailable."));
     for (const hint of renderSystemdUnavailableHints({ wsl: isWSLEnv() })) {
@@ -181,7 +189,7 @@ export function printDaemonStatus(status: DaemonStatus, opts: { json: boolean })
 
   if (service.runtime?.missingUnit) {
     defaultRuntime.error(errorText("Service unit not found."));
-    for (const hint of renderRuntimeHints(service.runtime)) {
+    for (const hint of renderRuntimeHints(service.runtime, hintEnv)) {
       defaultRuntime.error(errorText(hint));
     }
   } else if (service.loaded && service.runtime?.status === "stopped") {
@@ -190,7 +198,7 @@ export function printDaemonStatus(status: DaemonStatus, opts: { json: boolean })
     );
     for (const hint of renderRuntimeHints(
       service.runtime,
-      (service.command?.environment ?? process.env) as NodeJS.ProcessEnv,
+      hintEnv,
     )) {
       defaultRuntime.error(errorText(hint));
     }
@@ -239,10 +247,11 @@ export function printDaemonStatus(status: DaemonStatus, opts: { json: boolean })
       defaultRuntime.error(`${errorText("Last gateway error:")} ${status.lastError}`);
     }
     if (process.platform === "linux") {
-      const env = (service.command?.environment ?? process.env) as NodeJS.ProcessEnv;
-      const unit = resolveGatewaySystemdServiceName(env.CLAWDBOT_PROFILE);
+      const unit = resolveGatewaySystemdServiceName(hintEnv.CLAWDBOT_PROFILE);
+      const scope = resolveSystemdScope(hintEnv as Record<string, string | undefined>);
+      const journalPrefix = scope === "system" ? "journalctl" : "journalctl --user";
       defaultRuntime.error(
-        errorText(`Logs: journalctl --user -u ${unit}.service -n 200 --no-pager`),
+        errorText(`Logs: ${journalPrefix} -u ${unit}.service -n 200 --no-pager`),
       );
     } else if (process.platform === "darwin") {
       const logs = resolveGatewayLogPaths(
@@ -268,7 +277,10 @@ export function printDaemonStatus(status: DaemonStatus, opts: { json: boolean })
     for (const svc of extraServices) {
       defaultRuntime.error(`- ${errorText(svc.label)} (${svc.scope}, ${svc.detail})`);
     }
-    for (const hint of renderGatewayServiceCleanupHints()) {
+    for (const hint of renderGatewayServiceCleanupHints({
+      env: hintEnv as Record<string, string | undefined>,
+      scope: service.systemdScope,
+    })) {
       defaultRuntime.error(`${errorText("Cleanup hint:")} ${hint}`);
     }
     spacer();

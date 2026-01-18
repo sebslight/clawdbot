@@ -10,6 +10,7 @@ export async function runDaemonStatus(opts: DaemonStatusOptions) {
       rpc: opts.rpc,
       probe: Boolean(opts.probe),
       deep: Boolean(opts.deep),
+      system: Boolean(opts.system),
     });
     printDaemonStatus(status, { json: Boolean(opts.json) });
   } catch (err) {

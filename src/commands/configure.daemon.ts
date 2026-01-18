@@ -11,6 +11,7 @@ import {
 } from "./daemon-runtime.js";
 import { guardCancel } from "./onboard-helpers.js";
 import { ensureSystemdUserLingerInteractive } from "./systemd-linger.js";
+import { resolveSystemdScope } from "../daemon/systemd.js";
 
 export async function maybeInstallDaemon(params: {
   runtime: RuntimeEnv;
@@ -114,15 +115,20 @@ export async function maybeInstallDaemon(params: {
   }
 
   if (shouldCheckLinger) {
-    await ensureSystemdUserLingerInteractive({
-      runtime: params.runtime,
-      prompter: {
-        confirm: async (p) => guardCancel(await confirm(p), params.runtime) === true,
-        note,
-      },
-      reason:
-        "Linux installs use a systemd user service. Without lingering, systemd stops the user session on logout/idle and kills the Gateway.",
-      requireConfirm: true,
-    });
+    const systemdScope = resolveSystemdScope(
+      process.env as Record<string, string | undefined>,
+    );
+    if (systemdScope === "user") {
+      await ensureSystemdUserLingerInteractive({
+        runtime: params.runtime,
+        prompter: {
+          confirm: async (p) => guardCancel(await confirm(p), params.runtime) === true,
+          note,
+        },
+        reason:
+          "Linux installs use a systemd user service. Without lingering, systemd stops the user session on logout/idle and kills the Gateway.",
+        requireConfirm: true,
+      });
+    }
   }
 }

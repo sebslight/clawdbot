@@ -4,6 +4,7 @@ import {
   resolveGatewayWindowsTaskName,
 } from "../../daemon/constants.js";
 import { resolveGatewayLogPaths } from "../../daemon/launchd.js";
+import { resolveSystemdScope } from "../../daemon/systemd.js";
 import { getResolvedLoggerSettings } from "../../logging.js";
 
 export function parsePort(raw: unknown): number | null {
@@ -56,6 +57,7 @@ export function safeDaemonEnv(env: Record<string, string> | undefined): string[]
     "CLAWDBOT_STATE_DIR",
     "CLAWDBOT_CONFIG_PATH",
     "CLAWDBOT_GATEWAY_PORT",
+    "CLAWDBOT_SYSTEMD_SCOPE",
     "CLAWDBOT_NIX_MODE",
   ];
   const lines: string[] = [];
@@ -122,7 +124,10 @@ export function renderRuntimeHints(
     }
   })();
   if (runtime.missingUnit) {
-    hints.push("Service not installed. Run: clawdbot daemon install");
+    const scope = resolveSystemdScope(env as Record<string, string | undefined>);
+    const installHint =
+      scope === "system" ? "clawdbot daemon install --system" : "clawdbot daemon install";
+    hints.push(`Service not installed. Run: ${installHint}`);
     if (fileLog) hints.push(`File logs: ${fileLog}`);
     return hints;
   }
@@ -133,8 +138,10 @@ export function renderRuntimeHints(
       hints.push(`Launchd stdout (if installed): ${logs.stdoutPath}`);
       hints.push(`Launchd stderr (if installed): ${logs.stderrPath}`);
     } else if (process.platform === "linux") {
+      const scope = resolveSystemdScope(env as Record<string, string | undefined>);
       const unit = resolveGatewaySystemdServiceName(env.CLAWDBOT_PROFILE);
-      hints.push(`Logs: journalctl --user -u ${unit}.service -n 200 --no-pager`);
+      const journalPrefix = scope === "system" ? "journalctl" : "journalctl --user";
+      hints.push(`Logs: ${journalPrefix} -u ${unit}.service -n 200 --no-pager`);
     } else if (process.platform === "win32") {
       const task = resolveGatewayWindowsTaskName(env.CLAWDBOT_PROFILE);
       hints.push(`Logs: schtasks /Query /TN "${task}" /V /FO LIST`);
@@ -144,7 +151,10 @@ export function renderRuntimeHints(
 }
 
 export function renderGatewayServiceStartHints(env: NodeJS.ProcessEnv = process.env): string[] {
-  const base = ["clawdbot daemon install", "clawdbot gateway"];
+  const scope = resolveSystemdScope(env as Record<string, string | undefined>);
+  const installCommand =
+    scope === "system" ? "clawdbot daemon install --system" : "clawdbot daemon install";
+  const base = [installCommand, "clawdbot gateway"];
   const profile = env.CLAWDBOT_PROFILE;
   switch (process.platform) {
     case "darwin": {
@@ -153,7 +163,8 @@ export function renderGatewayServiceStartHints(env: NodeJS.ProcessEnv = process.
     }
     case "linux": {
       const unit = resolveGatewaySystemdServiceName(profile);
-      return [...base, `systemctl --user start ${unit}.service`];
+      const systemctlPrefix = scope === "system" ? "systemctl" : "systemctl --user";
+      return [...base, `${systemctlPrefix} start ${unit}.service`];
     }
     case "win32": {
       const task = resolveGatewayWindowsTaskName(profile);

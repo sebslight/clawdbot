@@ -46,6 +46,10 @@ export async function runDaemonInstall(opts: DaemonInstallOptions) {
     return;
   }
 
+  const env = {
+    ...(process.env as Record<string, string | undefined>),
+    ...(opts.system ? { CLAWDBOT_SYSTEMD_SCOPE: "system" } : {}),
+  };
   const cfg = loadConfig();
   const portOverride = parsePort(opts.port);
   if (opts.port !== undefined && portOverride === null) {
@@ -66,7 +70,7 @@ export async function runDaemonInstall(opts: DaemonInstallOptions) {
   const service = resolveGatewayService();
   let loaded = false;
   try {
-    loaded = await service.isLoaded({ env: process.env });
+    loaded = await service.isLoaded({ env });
   } catch (err) {
     fail(`Gateway service check failed: ${String(err)}`);
     return;
@@ -89,7 +93,7 @@ export async function runDaemonInstall(opts: DaemonInstallOptions) {
   }
 
   const { programArguments, workingDirectory, environment } = await buildGatewayInstallPlan({
-    env: process.env,
+    env,
     port,
     token: opts.token || cfg.gateway?.auth?.token || process.env.CLAWDBOT_GATEWAY_TOKEN,
     runtime: runtimeRaw,
@@ -101,7 +105,7 @@ export async function runDaemonInstall(opts: DaemonInstallOptions) {
 
   try {
     await service.install({
-      env: process.env,
+      env,
       stdout,
       programArguments,
       workingDirectory,
@@ -114,7 +118,7 @@ export async function runDaemonInstall(opts: DaemonInstallOptions) {
 
   let installed = true;
   try {
-    installed = await service.isLoaded({ env: process.env });
+    installed = await service.isLoaded({ env });
   } catch {
     installed = true;
   }

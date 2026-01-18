@@ -44,6 +44,12 @@ Or:
 clawdbot daemon install
 ```
 
+For containers or hosts without user systemd (ex: Proxmox LXC), use a system service:
+
+```
+clawdbot daemon install --system
+```
+
 Or:
 
 ```

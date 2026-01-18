@@ -12,7 +12,7 @@ import {
   repairLaunchAgentBootstrap,
 } from "../daemon/launchd.js";
 import { resolveGatewayService } from "../daemon/service.js";
-import { isSystemdUserServiceAvailable } from "../daemon/systemd.js";
+import { isSystemdUserServiceAvailable, resolveSystemdScope } from "../daemon/systemd.js";
 import { renderSystemdUnavailableHints } from "../daemon/systemd-hints.js";
 import { formatPortDiagnostics, inspectPortUsage } from "../infra/ports.js";
 import { isWSL } from "../infra/wsl.js";
@@ -125,11 +125,16 @@ export async function maybeRepairGatewayDaemon(params: {
 
   if (!loaded) {
     if (process.platform === "linux") {
-      const systemdAvailable = await isSystemdUserServiceAvailable().catch(() => false);
-      if (!systemdAvailable) {
-        const wsl = await isWSL();
-        note(renderSystemdUnavailableHints({ wsl }).join("\n"), "Gateway");
-        return;
+      const systemdScope = resolveSystemdScope(
+        process.env as Record<string, string | undefined>,
+      );
+      if (systemdScope === "user") {
+        const systemdAvailable = await isSystemdUserServiceAvailable().catch(() => false);
+        if (!systemdAvailable) {
+          const wsl = await isWSL();
+          note(renderSystemdUnavailableHints({ wsl }).join("\n"), "Gateway");
+          return;
+        }
       }
     }
     note("Gateway daemon not installed.", "Gateway");

@@ -1,6 +1,6 @@
 import { resolveIsNixMode } from "../../config/paths.js";
 import { resolveGatewayService } from "../../daemon/service.js";
-import { isSystemdUserServiceAvailable } from "../../daemon/systemd.js";
+import { isSystemdUserServiceAvailable, resolveSystemdScope } from "../../daemon/systemd.js";
 import { renderSystemdUnavailableHints } from "../../daemon/systemd-hints.js";
 import { isWSL } from "../../infra/wsl.js";
 import { defaultRuntime } from "../../runtime.js";
@@ -11,6 +11,10 @@ import type { DaemonLifecycleOptions } from "./types.js";
 export async function runDaemonUninstall(opts: DaemonLifecycleOptions = {}) {
   const json = Boolean(opts.json);
   const stdout = json ? createNullWriter() : process.stdout;
+  const env = {
+    ...(process.env as Record<string, string | undefined>),
+    ...(opts.system ? { CLAWDBOT_SYSTEMD_SCOPE: "system" } : {}),
+  };
   const emit = (payload: {
     ok: boolean;
     result?: string;
@@ -39,7 +43,7 @@ export async function runDaemonUninstall(opts: DaemonLifecycleOptions = {}) {
 
   const service = resolveGatewayService();
   try {
-    await service.uninstall({ env: process.env, stdout });
+    await service.uninstall({ env, stdout });
   } catch (err) {
     fail(`Gateway uninstall failed: ${String(err)}`);
     return;
@@ -47,7 +51,7 @@ export async function runDaemonUninstall(opts: DaemonLifecycleOptions = {}) {
 
   let loaded = false;
   try {
-    loaded = await service.isLoaded({ env: process.env });
+    loaded = await service.isLoaded({ env });
   } catch {
     loaded = false;
   }
@@ -61,6 +65,10 @@ export async function runDaemonUninstall(opts: DaemonLifecycleOptions = {}) {
 export async function runDaemonStart(opts: DaemonLifecycleOptions = {}) {
   const json = Boolean(opts.json);
   const stdout = json ? createNullWriter() : process.stdout;
+  const env = {
+    ...(process.env as Record<string, string | undefined>),
+    ...(opts.system ? { CLAWDBOT_SYSTEMD_SCOPE: "system" } : {}),
+  };
   const emit = (payload: {
     ok: boolean;
     result?: string;
@@ -86,17 +94,20 @@ export async function runDaemonStart(opts: DaemonLifecycleOptions = {}) {
   const service = resolveGatewayService();
   let loaded = false;
   try {
-    loaded = await service.isLoaded({ env: process.env });
+    loaded = await service.isLoaded({ env });
   } catch (err) {
     fail(`Gateway service check failed: ${String(err)}`);
     return;
   }
   if (!loaded) {
-    let hints = renderGatewayServiceStartHints();
+    let hints = renderGatewayServiceStartHints(env as NodeJS.ProcessEnv);
     if (process.platform === "linux") {
-      const systemdAvailable = await isSystemdUserServiceAvailable().catch(() => false);
-      if (!systemdAvailable) {
-        hints = [...hints, ...renderSystemdUnavailableHints({ wsl: await isWSL() })];
+      const scope = resolveSystemdScope(env);
+      if (scope === "user") {
+        const systemdAvailable = await isSystemdUserServiceAvailable().catch(() => false);
+        if (!systemdAvailable) {
+          hints = [...hints, ...renderSystemdUnavailableHints({ wsl: await isWSL() })];
+        }
       }
     }
     emit({
@@ -115,16 +126,16 @@ export async function runDaemonStart(opts: DaemonLifecycleOptions = {}) {
     return;
   }
   try {
-    await service.restart({ env: process.env, stdout });
+    await service.restart({ env, stdout });
   } catch (err) {
-    const hints = renderGatewayServiceStartHints();
+    const hints = renderGatewayServiceStartHints(env as NodeJS.ProcessEnv);
     fail(`Gateway start failed: ${String(err)}`, hints);
     return;
   }
 
   let started = true;
   try {
-    started = await service.isLoaded({ env: process.env });
+    started = await service.isLoaded({ env });
   } catch {
     started = true;
   }
@@ -138,6 +149,10 @@ export async function runDaemonStart(opts: DaemonLifecycleOptions = {}) {
 export async function runDaemonStop(opts: DaemonLifecycleOptions = {}) {
   const json = Boolean(opts.json);
   const stdout = json ? createNullWriter() : process.stdout;
+  const env = {
+    ...(process.env as Record<string, string | undefined>),
+    ...(opts.system ? { CLAWDBOT_SYSTEMD_SCOPE: "system" } : {}),
+  };
   const emit = (payload: {
     ok: boolean;
     result?: string;
@@ -162,7 +177,7 @@ export async function runDaemonStop(opts: DaemonLifecycleOptions = {}) {
   const service = resolveGatewayService();
   let loaded = false;
   try {
-    loaded = await service.isLoaded({ env: process.env });
+    loaded = await service.isLoaded({ env });
   } catch (err) {
     fail(`Gateway service check failed: ${String(err)}`);
     return;
@@ -180,7 +195,7 @@ export async function runDaemonStop(opts: DaemonLifecycleOptions = {}) {
     return;
   }
   try {
-    await service.stop({ env: process.env, stdout });
+    await service.stop({ env, stdout });
   } catch (err) {
     fail(`Gateway stop failed: ${String(err)}`);
     return;
@@ -188,7 +203,7 @@ export async function runDaemonStop(opts: DaemonLifecycleOptions = {}) {
 
   let stopped = false;
   try {
-    stopped = await service.isLoaded({ env: process.env });
+    stopped = await service.isLoaded({ env });
   } catch {
     stopped = false;
   }
@@ -207,6 +222,10 @@ export async function runDaemonStop(opts: DaemonLifecycleOptions = {}) {
 export async function runDaemonRestart(opts: DaemonLifecycleOptions = {}): Promise<boolean> {
   const json = Boolean(opts.json);
   const stdout = json ? createNullWriter() : process.stdout;
+  const env = {
+    ...(process.env as Record<string, string | undefined>),
+    ...(opts.system ? { CLAWDBOT_SYSTEMD_SCOPE: "system" } : {}),
+  };
   const emit = (payload: {
     ok: boolean;
     result?: string;
@@ -232,17 +251,20 @@ export async function runDaemonRestart(opts: DaemonLifecycleOptions = {}): Promi
   const service = resolveGatewayService();
   let loaded = false;
   try {
-    loaded = await service.isLoaded({ env: process.env });
+    loaded = await service.isLoaded({ env });
   } catch (err) {
     fail(`Gateway service check failed: ${String(err)}`);
     return false;
   }
   if (!loaded) {
-    let hints = renderGatewayServiceStartHints();
+    let hints = renderGatewayServiceStartHints(env as NodeJS.ProcessEnv);
     if (process.platform === "linux") {
-      const systemdAvailable = await isSystemdUserServiceAvailable().catch(() => false);
-      if (!systemdAvailable) {
-        hints = [...hints, ...renderSystemdUnavailableHints({ wsl: await isWSL() })];
+      const scope = resolveSystemdScope(env);
+      if (scope === "user") {
+        const systemdAvailable = await isSystemdUserServiceAvailable().catch(() => false);
+        if (!systemdAvailable) {
+          hints = [...hints, ...renderSystemdUnavailableHints({ wsl: await isWSL() })];
+        }
       }
     }
     emit({
@@ -261,10 +283,10 @@ export async function runDaemonRestart(opts: DaemonLifecycleOptions = {}): Promi
     return false;
   }
   try {
-    await service.restart({ env: process.env, stdout });
+    await service.restart({ env, stdout });
     let restarted = true;
     try {
-      restarted = await service.isLoaded({ env: process.env });
+      restarted = await service.isLoaded({ env });
     } catch {
       restarted = true;
     }
@@ -275,7 +297,7 @@ export async function runDaemonRestart(opts: DaemonLifecycleOptions = {}): Promi
     });
     return true;
   } catch (err) {
-    const hints = renderGatewayServiceStartHints();
+    const hints = renderGatewayServiceStartHints(env as NodeJS.ProcessEnv);
     fail(`Gateway restart failed: ${String(err)}`, hints);
     return false;
   }

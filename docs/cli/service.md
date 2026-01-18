@@ -27,6 +27,7 @@ clawdbot service gateway uninstall
 Notes:
 - `service gateway status` supports `--json` and `--deep` for system checks.
 - `service gateway install` supports `--runtime node|bun` and `--token`.
+- On Linux, add `--system` to manage a systemd **system** service (requires sudo).
 
 ## Node host service
 
@@ -42,6 +43,7 @@ clawdbot service node uninstall
 Notes:
 - `service node install` supports `--runtime node|bun`, `--node-id`, `--display-name`,
   and TLS options (`--tls`, `--tls-fingerprint`).
+- On Linux, add `--system` to manage a systemd **system** service (requires sudo).
 
 ## Aliases
 

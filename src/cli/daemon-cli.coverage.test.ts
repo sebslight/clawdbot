@@ -209,6 +209,23 @@ describe("daemon-cli coverage", () => {
     expect(serviceInstall).toHaveBeenCalledTimes(1);
   });
 
+  it("passes systemd scope when --system is set", async () => {
+    serviceIsLoaded.mockResolvedValueOnce(false);
+    serviceInstall.mockClear();
+
+    const { registerDaemonCli } = await import("./daemon-cli.js");
+    const program = new Command();
+    program.exitOverride();
+    registerDaemonCli(program);
+
+    await program.parseAsync(["daemon", "install", "--port", "18789", "--system"], {
+      from: "user",
+    });
+
+    const args = serviceInstall.mock.calls[0]?.[0] as { env?: Record<string, string> } | undefined;
+    expect(args?.env?.CLAWDBOT_SYSTEMD_SCOPE).toBe("system");
+  });
+
   it("installs the daemon with json output", async () => {
     runtimeLogs.length = 0;
     runtimeErrors.length = 0;

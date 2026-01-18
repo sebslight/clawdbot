@@ -55,6 +55,7 @@ export function registerNodeCli(program: Command) {
     cmd
       .command("status")
       .description("Show node service status")
+      .option("--system", "Use systemd system service on Linux", false)
       .option("--json", "Output JSON", false)
       .action(async (opts) => {
         await runNodeDaemonStatus(opts);
@@ -71,6 +72,7 @@ export function registerNodeCli(program: Command) {
       .option("--display-name <name>", "Override node display name")
       .option("--runtime <runtime>", "Service runtime (node|bun). Default: node")
       .option("--force", "Reinstall/overwrite if already installed", false)
+      .option("--system", "Use systemd system service on Linux", false)
       .option("--json", "Output JSON", false)
       .action(async (opts) => {
         await runNodeDaemonInstall(opts);
@@ -79,6 +81,7 @@ export function registerNodeCli(program: Command) {
     cmd
       .command("uninstall")
       .description("Uninstall the node service (launchd/systemd/schtasks)")
+      .option("--system", "Use systemd system service on Linux", false)
       .option("--json", "Output JSON", false)
       .action(async (opts) => {
         await runNodeDaemonUninstall(opts);
@@ -87,6 +90,7 @@ export function registerNodeCli(program: Command) {
     cmd
       .command("start")
       .description("Start the node service (launchd/systemd/schtasks)")
+      .option("--system", "Use systemd system service on Linux", false)
       .option("--json", "Output JSON", false)
       .action(async (opts) => {
         await runNodeDaemonStart(opts);
@@ -95,6 +99,7 @@ export function registerNodeCli(program: Command) {
     cmd
       .command("stop")
       .description("Stop the node service (launchd/systemd/schtasks)")
+      .option("--system", "Use systemd system service on Linux", false)
       .option("--json", "Output JSON", false)
       .action(async (opts) => {
         await runNodeDaemonStop(opts);
@@ -103,6 +108,7 @@ export function registerNodeCli(program: Command) {
     cmd
       .command("restart")
       .description("Restart the node service (launchd/systemd/schtasks)")
+      .option("--system", "Use systemd system service on Linux", false)
       .option("--json", "Output JSON", false)
       .action(async (opts) => {
         await runNodeDaemonRestart(opts);

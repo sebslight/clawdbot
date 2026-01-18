@@ -13,6 +13,7 @@ import {
   resolveNodeSystemdServiceName,
   resolveNodeWindowsTaskName,
 } from "./constants.js";
+import { resolveSystemdScope } from "./systemd.js";
 
 export type MinimalServicePathOptions = {
   platform?: NodeJS.Platform;
@@ -69,6 +70,7 @@ export function buildServiceEnvironment(params: {
   launchdLabel?: string;
 }): Record<string, string | undefined> {
   const { env, port, token, launchdLabel } = params;
+  const systemdScope = resolveSystemdScope(env);
   const profile = env.CLAWDBOT_PROFILE;
   const resolvedLaunchdLabel =
     launchdLabel ||
@@ -83,6 +85,7 @@ export function buildServiceEnvironment(params: {
     CLAWDBOT_GATEWAY_TOKEN: token,
     CLAWDBOT_LAUNCHD_LABEL: resolvedLaunchdLabel,
     CLAWDBOT_SYSTEMD_UNIT: systemdUnit,
+    CLAWDBOT_SYSTEMD_SCOPE: systemdScope,
     CLAWDBOT_SERVICE_MARKER: GATEWAY_SERVICE_MARKER,
     CLAWDBOT_SERVICE_KIND: GATEWAY_SERVICE_KIND,
     CLAWDBOT_SERVICE_VERSION: VERSION,
@@ -93,12 +96,14 @@ export function buildNodeServiceEnvironment(params: {
   env: Record<string, string | undefined>;
 }): Record<string, string | undefined> {
   const { env } = params;
+  const systemdScope = resolveSystemdScope(env);
   return {
     PATH: buildMinimalServicePath({ env }),
     CLAWDBOT_STATE_DIR: env.CLAWDBOT_STATE_DIR,
     CLAWDBOT_CONFIG_PATH: env.CLAWDBOT_CONFIG_PATH,
     CLAWDBOT_LAUNCHD_LABEL: resolveNodeLaunchAgentLabel(),
     CLAWDBOT_SYSTEMD_UNIT: resolveNodeSystemdServiceName(),
+    CLAWDBOT_SYSTEMD_SCOPE: systemdScope,
     CLAWDBOT_WINDOWS_TASK_NAME: resolveNodeWindowsTaskName(),
     CLAWDBOT_TASK_SCRIPT_NAME: NODE_WINDOWS_TASK_SCRIPT_NAME,
     CLAWDBOT_LOG_PREFIX: "node",

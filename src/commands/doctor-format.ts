@@ -8,6 +8,7 @@ import {
   isSystemdUnavailableDetail,
   renderSystemdUnavailableHints,
 } from "../daemon/systemd-hints.js";
+import { resolveSystemdScope } from "../daemon/systemd.js";
 import { isWSLEnv } from "../infra/wsl.js";
 import type { GatewayServiceRuntime } from "../daemon/service-runtime.js";
 import { getResolvedLoggerSettings } from "../logging.js";
@@ -72,7 +73,10 @@ export function buildGatewayRuntimeHints(
     hints.push("Then reinstall: clawdbot daemon install");
   }
   if (runtime.missingUnit) {
-    hints.push("Service not installed. Run: clawdbot daemon install");
+    const scope = resolveSystemdScope(env as Record<string, string | undefined>);
+    const installHint =
+      scope === "system" ? "clawdbot daemon install --system" : "clawdbot daemon install";
+    hints.push(`Service not installed. Run: ${installHint}`);
     if (fileLog) hints.push(`File logs: ${fileLog}`);
     return hints;
   }
@@ -84,8 +88,10 @@ export function buildGatewayRuntimeHints(
       hints.push(`Launchd stdout (if installed): ${logs.stdoutPath}`);
       hints.push(`Launchd stderr (if installed): ${logs.stderrPath}`);
     } else if (platform === "linux") {
+      const scope = resolveSystemdScope(env as Record<string, string | undefined>);
       const unit = resolveGatewaySystemdServiceName(env.CLAWDBOT_PROFILE);
-      hints.push(`Logs: journalctl --user -u ${unit}.service -n 200 --no-pager`);
+      const journalPrefix = scope === "system" ? "journalctl" : "journalctl --user";
+      hints.push(`Logs: ${journalPrefix} -u ${unit}.service -n 200 --no-pager`);
     } else if (platform === "win32") {
       const task = resolveGatewayWindowsTaskName(env.CLAWDBOT_PROFILE);
       hints.push(`Logs: schtasks /Query /TN "${task}" /V /FO LIST`);

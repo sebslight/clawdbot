@@ -7,7 +7,7 @@ import {
   resolveSystemNodePath,
 } from "./runtime-paths.js";
 import { getMinimalServicePathParts } from "./service-env.js";
-import { resolveSystemdUserUnitPath } from "./systemd.js";
+import { resolveSystemdScope, resolveSystemdUnitPath, type SystemdScope } from "./systemd.js";
 
 export type GatewayServiceCommand = {
   programArguments: string[];
@@ -101,8 +101,9 @@ function isRestartSecPreferred(value: string | undefined): boolean {
 async function auditSystemdUnit(
   env: Record<string, string | undefined>,
   issues: ServiceConfigIssue[],
+  scope: SystemdScope,
 ) {
-  const unitPath = resolveSystemdUserUnitPath(env);
+  const unitPath = resolveSystemdUnitPath(env, scope);
   let content = "";
   try {
     content = await fs.readFile(unitPath, "utf8");
@@ -319,7 +320,8 @@ export async function auditGatewayServiceConfig(params: {
   await auditGatewayRuntime(params.env, params.command, issues, platform);
 
   if (platform === "linux") {
-    await auditSystemdUnit(params.env, issues);
+    const scope = resolveSystemdScope(params.env);
+    await auditSystemdUnit(params.env, issues, scope);
   } else if (platform === "darwin") {
     await auditLaunchdPlist(params.env, issues);
   }

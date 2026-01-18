@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { parseSystemdShow, resolveSystemdUserUnitPath } from "./systemd.js";
+import {
+  parseSystemdShow,
+  resolveSystemdScope,
+  resolveSystemdUnitPath,
+  resolveSystemdUserUnitPath,
+} from "./systemd.js";
 
 describe("systemd runtime parsing", () => {
   it("parses active state details", () => {
@@ -92,5 +97,24 @@ describe("resolveSystemdUserUnitPath", () => {
     expect(resolveSystemdUserUnitPath(env)).toBe(
       "/home/test/.config/systemd/user/clawdbot-gateway-myprofile.service",
     );
+  });
+});
+
+describe("resolveSystemdUnitPath", () => {
+  it("resolves system scope to /etc/systemd/system", () => {
+    const env = { HOME: "/home/test", CLAWDBOT_PROFILE: "main" };
+    expect(resolveSystemdUnitPath(env, "system")).toBe(
+      "/etc/systemd/system/clawdbot-gateway-main.service",
+    );
+  });
+});
+
+describe("resolveSystemdScope", () => {
+  it("defaults to user scope", () => {
+    expect(resolveSystemdScope({})).toBe("user");
+  });
+
+  it("resolves system scope from env", () => {
+    expect(resolveSystemdScope({ CLAWDBOT_SYSTEMD_SCOPE: "system" })).toBe("system");
   });
 });

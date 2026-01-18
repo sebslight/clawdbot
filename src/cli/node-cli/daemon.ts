@@ -11,7 +11,7 @@ import {
 import { resolveGatewayLogPaths } from "../../daemon/launchd.js";
 import { resolveNodeService } from "../../daemon/node-service.js";
 import type { GatewayServiceRuntime } from "../../daemon/service-runtime.js";
-import { isSystemdUserServiceAvailable } from "../../daemon/systemd.js";
+import { isSystemdUserServiceAvailable, resolveSystemdScope } from "../../daemon/systemd.js";
 import { renderSystemdUnavailableHints } from "../../daemon/systemd-hints.js";
 import { resolveIsNixMode } from "../../config/paths.js";
 import { isWSL } from "../../infra/wsl.js";
@@ -35,18 +35,26 @@ type NodeDaemonInstallOptions = {
   runtime?: string;
   force?: boolean;
   json?: boolean;
+  system?: boolean;
 };
 
 type NodeDaemonLifecycleOptions = {
   json?: boolean;
+  system?: boolean;
 };
 
 type NodeDaemonStatusOptions = {
   json?: boolean;
+  system?: boolean;
 };
 
-function renderNodeServiceStartHints(): string[] {
-  const base = ["clawdbot node service install", "clawdbot node start"];
+function renderNodeServiceStartHints(env: NodeJS.ProcessEnv = process.env): string[] {
+  const scope = resolveSystemdScope(env as Record<string, string | undefined>);
+  const installCommand =
+    scope === "system"
+      ? "clawdbot node service install --system"
+      : "clawdbot node service install";
+  const base = [installCommand, "clawdbot node start"];
   switch (process.platform) {
     case "darwin":
       return [
@@ -54,7 +62,8 @@ function renderNodeServiceStartHints(): string[] {
         `launchctl bootstrap gui/$UID ~/Library/LaunchAgents/${resolveNodeLaunchAgentLabel()}.plist`,
       ];
     case "linux":
-      return [...base, `systemctl --user start ${resolveNodeSystemdServiceName()}.service`];
+      const systemctlPrefix = scope === "system" ? "systemctl" : "systemctl --user";
+      return [...base, `${systemctlPrefix} start ${resolveNodeSystemdServiceName()}.service`];
     case "win32":
       return [...base, `schtasks /Run /TN "${resolveNodeWindowsTaskName()}"`];
     default:
@@ -71,8 +80,10 @@ function buildNodeRuntimeHints(env: NodeJS.ProcessEnv = process.env): string[] {
     ];
   }
   if (process.platform === "linux") {
+    const scope = resolveSystemdScope(env as Record<string, string | undefined>);
+    const journalPrefix = scope === "system" ? "journalctl" : "journalctl --user";
     const unit = resolveNodeSystemdServiceName();
-    return [`Logs: journalctl --user -u ${unit}.service -n 200 --no-pager`];
+    return [`Logs: ${journalPrefix} -u ${unit}.service -n 200 --no-pager`];
   }
   if (process.platform === "win32") {
     const task = resolveNodeWindowsTaskName();
@@ -98,6 +109,10 @@ export async function runNodeDaemonInstall(opts: NodeDaemonInstallOptions) {
   const json = Boolean(opts.json);
   const warnings: string[] = [];
   const stdout = json ? createNullWriter() : process.stdout;
+  const env = {
+    ...(process.env as Record<string, string | undefined>),
+    ...(opts.system ? { CLAWDBOT_SYSTEMD_SCOPE: "system" } : {}),
+  };
   const emit = (payload: {
     ok: boolean;
     result?: string;
@@ -153,7 +168,7 @@ export async function runNodeDaemonInstall(opts: NodeDaemonInstallOptions) {
   const service = resolveNodeService();
   let loaded = false;
   try {
-    loaded = await service.isLoaded({ env: process.env });
+    loaded = await service.isLoaded({ env });
   } catch (err) {
     fail(`Node service check failed: ${String(err)}`);
     return;
@@ -177,7 +192,7 @@ export async function runNodeDaemonInstall(opts: NodeDaemonInstallOptions) {
   const tls = Boolean(opts.tls) || Boolean(tlsFingerprint) || Boolean(config?.gateway?.tls);
   const { programArguments, workingDirectory, environment, description } =
     await buildNodeInstallPlan({
-      env: process.env,
+      env,
       host,
       port: port ?? 18790,
       tls,
@@ -193,7 +208,7 @@ export async function runNodeDaemonInstall(opts: NodeDaemonInstallOptions) {
 
   try {
     await service.install({
-      env: process.env,
+      env,
       stdout,
       programArguments,
       workingDirectory,
@@ -207,7 +222,7 @@ export async function runNodeDaemonInstall(opts: NodeDaemonInstallOptions) {
 
   let installed = true;
   try {
-    installed = await service.isLoaded({ env: process.env });
+    installed = await service.isLoaded({ env });
   } catch {
     installed = true;
   }
@@ -222,6 +237,10 @@ export async function runNodeDaemonInstall(opts: NodeDaemonInstallOptions) {
 export async function runNodeDaemonUninstall(opts: NodeDaemonLifecycleOptions = {}) {
   const json = Boolean(opts.json);
   const stdout = json ? createNullWriter() : process.stdout;
+  const env = {
+    ...(process.env as Record<string, string | undefined>),
+    ...(opts.system ? { CLAWDBOT_SYSTEMD_SCOPE: "system" } : {}),
+  };
   const emit = (payload: {
     ok: boolean;
     result?: string;
@@ -250,7 +269,7 @@ export async function runNodeDaemonUninstall(opts: NodeDaemonLifecycleOptions = 
 
   const service = resolveNodeService();
   try {
-    await service.uninstall({ env: process.env, stdout });
+    await service.uninstall({ env, stdout });
   } catch (err) {
     fail(`Node uninstall failed: ${String(err)}`);
     return;
@@ -258,7 +277,7 @@ export async function runNodeDaemonUninstall(opts: NodeDaemonLifecycleOptions = 
 
   let loaded = false;
   try {
-    loaded = await service.isLoaded({ env: process.env });
+    loaded = await service.isLoaded({ env });
   } catch {
     loaded = false;
   }
@@ -272,6 +291,10 @@ export async function runNodeDaemonUninstall(opts: NodeDaemonLifecycleOptions = 
 export async function runNodeDaemonStart(opts: NodeDaemonLifecycleOptions = {}) {
   const json = Boolean(opts.json);
   const stdout = json ? createNullWriter() : process.stdout;
+  const env = {
+    ...(process.env as Record<string, string | undefined>),
+    ...(opts.system ? { CLAWDBOT_SYSTEMD_SCOPE: "system" } : {}),
+  };
   const emit = (payload: {
     ok: boolean;
     result?: string;
@@ -297,17 +320,20 @@ export async function runNodeDaemonStart(opts: NodeDaemonLifecycleOptions = {}) 
   const service = resolveNodeService();
   let loaded = false;
   try {
-    loaded = await service.isLoaded({ env: process.env });
+    loaded = await service.isLoaded({ env });
   } catch (err) {
     fail(`Node service check failed: ${String(err)}`);
     return;
   }
   if (!loaded) {
-    let hints = renderNodeServiceStartHints();
+    let hints = renderNodeServiceStartHints(env as NodeJS.ProcessEnv);
     if (process.platform === "linux") {
-      const systemdAvailable = await isSystemdUserServiceAvailable().catch(() => false);
-      if (!systemdAvailable) {
-        hints = [...hints, ...renderSystemdUnavailableHints({ wsl: await isWSL() })];
+      const scope = resolveSystemdScope(env);
+      if (scope === "user") {
+        const systemdAvailable = await isSystemdUserServiceAvailable().catch(() => false);
+        if (!systemdAvailable) {
+          hints = [...hints, ...renderSystemdUnavailableHints({ wsl: await isWSL() })];
+        }
       }
     }
     emit({
@@ -326,16 +352,16 @@ export async function runNodeDaemonStart(opts: NodeDaemonLifecycleOptions = {}) 
     return;
   }
   try {
-    await service.restart({ env: process.env, stdout });
+    await service.restart({ env, stdout });
   } catch (err) {
-    const hints = renderNodeServiceStartHints();
+    const hints = renderNodeServiceStartHints(env as NodeJS.ProcessEnv);
     fail(`Node start failed: ${String(err)}`, hints);
     return;
   }
 
   let started = true;
   try {
-    started = await service.isLoaded({ env: process.env });
+    started = await service.isLoaded({ env });
   } catch {
     started = true;
   }
@@ -349,6 +375,10 @@ export async function runNodeDaemonStart(opts: NodeDaemonLifecycleOptions = {}) 
 export async function runNodeDaemonRestart(opts: NodeDaemonLifecycleOptions = {}) {
   const json = Boolean(opts.json);
   const stdout = json ? createNullWriter() : process.stdout;
+  const env = {
+    ...(process.env as Record<string, string | undefined>),
+    ...(opts.system ? { CLAWDBOT_SYSTEMD_SCOPE: "system" } : {}),
+  };
   const emit = (payload: {
     ok: boolean;
     result?: string;
@@ -374,17 +404,20 @@ export async function runNodeDaemonRestart(opts: NodeDaemonLifecycleOptions = {}
   const service = resolveNodeService();
   let loaded = false;
   try {
-    loaded = await service.isLoaded({ env: process.env });
+    loaded = await service.isLoaded({ env });
   } catch (err) {
     fail(`Node service check failed: ${String(err)}`);
     return;
   }
   if (!loaded) {
-    let hints = renderNodeServiceStartHints();
+    let hints = renderNodeServiceStartHints(env as NodeJS.ProcessEnv);
     if (process.platform === "linux") {
-      const systemdAvailable = await isSystemdUserServiceAvailable().catch(() => false);
-      if (!systemdAvailable) {
-        hints = [...hints, ...renderSystemdUnavailableHints({ wsl: await isWSL() })];
+      const scope = resolveSystemdScope(env);
+      if (scope === "user") {
+        const systemdAvailable = await isSystemdUserServiceAvailable().catch(() => false);
+        if (!systemdAvailable) {
+          hints = [...hints, ...renderSystemdUnavailableHints({ wsl: await isWSL() })];
+        }
       }
     }
     emit({
@@ -403,16 +436,16 @@ export async function runNodeDaemonRestart(opts: NodeDaemonLifecycleOptions = {}
     return;
   }
   try {
-    await service.restart({ env: process.env, stdout });
+    await service.restart({ env, stdout });
   } catch (err) {
-    const hints = renderNodeServiceStartHints();
+    const hints = renderNodeServiceStartHints(env as NodeJS.ProcessEnv);
     fail(`Node restart failed: ${String(err)}`, hints);
     return;
   }
 
   let restarted = true;
   try {
-    restarted = await service.isLoaded({ env: process.env });
+    restarted = await service.isLoaded({ env });
   } catch {
     restarted = true;
   }
@@ -426,6 +459,10 @@ export async function runNodeDaemonRestart(opts: NodeDaemonLifecycleOptions = {}
 export async function runNodeDaemonStop(opts: NodeDaemonLifecycleOptions = {}) {
   const json = Boolean(opts.json);
   const stdout = json ? createNullWriter() : process.stdout;
+  const env = {
+    ...(process.env as Record<string, string | undefined>),
+    ...(opts.system ? { CLAWDBOT_SYSTEMD_SCOPE: "system" } : {}),
+  };
   const emit = (payload: {
     ok: boolean;
     result?: string;
@@ -450,7 +487,7 @@ export async function runNodeDaemonStop(opts: NodeDaemonLifecycleOptions = {}) {
   const service = resolveNodeService();
   let loaded = false;
   try {
-    loaded = await service.isLoaded({ env: process.env });
+    loaded = await service.isLoaded({ env });
   } catch (err) {
     fail(`Node service check failed: ${String(err)}`);
     return;
@@ -468,7 +505,7 @@ export async function runNodeDaemonStop(opts: NodeDaemonLifecycleOptions = {}) {
     return;
   }
   try {
-    await service.stop({ env: process.env, stdout });
+    await service.stop({ env, stdout });
   } catch (err) {
     fail(`Node stop failed: ${String(err)}`);
     return;
@@ -476,7 +513,7 @@ export async function runNodeDaemonStop(opts: NodeDaemonLifecycleOptions = {}) {
 
   let stopped = false;
   try {
-    stopped = await service.isLoaded({ env: process.env });
+    stopped = await service.isLoaded({ env });
   } catch {
     stopped = false;
   }
@@ -489,12 +526,16 @@ export async function runNodeDaemonStop(opts: NodeDaemonLifecycleOptions = {}) {
 
 export async function runNodeDaemonStatus(opts: NodeDaemonStatusOptions = {}) {
   const json = Boolean(opts.json);
+  const env = {
+    ...(process.env as Record<string, string | undefined>),
+    ...(opts.system ? { CLAWDBOT_SYSTEMD_SCOPE: "system" } : {}),
+  };
   const service = resolveNodeService();
   const [loaded, command, runtime] = await Promise.all([
-    service.isLoaded({ env: process.env }).catch(() => false),
-    service.readCommand(process.env).catch(() => null),
+    service.isLoaded({ env }).catch(() => false),
+    service.readCommand(env).catch(() => null),
     service
-      .readRuntime(process.env)
+      .readRuntime(env)
       .catch((err): GatewayServiceRuntime => ({ status: "unknown", detail: String(err) })),
   ]);
 
@@ -548,14 +589,14 @@ export async function runNodeDaemonStatus(opts: NodeDaemonStatusOptions = {}) {
 
   if (!loaded) {
     defaultRuntime.log("");
-    for (const hint of renderNodeServiceStartHints()) {
+    for (const hint of renderNodeServiceStartHints(env as NodeJS.ProcessEnv)) {
       defaultRuntime.log(`${warnText("Start with:")} ${infoText(hint)}`);
     }
     return;
   }
 
   const baseEnv = {
-    ...(process.env as Record<string, string | undefined>),
+    ...env,
     ...(command?.environment ?? undefined),
   };
   const hintEnv = {

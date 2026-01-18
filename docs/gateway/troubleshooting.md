@@ -54,7 +54,11 @@ Doctor/daemon will show runtime state (PID/last exit) and log hints.
 - File logs (always): `/tmp/clawdbot/clawdbot-YYYY-MM-DD.log` (or your configured `logging.file`)
 - macOS LaunchAgent (if installed): `$CLAWDBOT_STATE_DIR/logs/gateway.log` and `gateway.err.log`
 - Linux systemd (if installed): `journalctl --user -u clawdbot-gateway[-<profile>].service -n 200 --no-pager`
+- Linux systemd (system service): `journalctl -u clawdbot-gateway[-<profile>].service -n 200 --no-pager`
 - Windows: `schtasks /Query /TN "Clawdbot Gateway (<profile>)" /V /FO LIST`
+
+If systemd **user** services are unavailable (containers/Proxmox), install a system service:
+`clawdbot daemon install --system`.
 
 **Enable more logging:**
 - Bump file log detail (persisted JSONL):

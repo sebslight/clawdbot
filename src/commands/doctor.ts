@@ -10,6 +10,7 @@ import {
 import type { ClawdbotConfig } from "../config/config.js";
 import { CONFIG_PATH_CLAWDBOT, writeConfigFile } from "../config/config.js";
 import { resolveGatewayService } from "../daemon/service.js";
+import { resolveSystemdScope } from "../daemon/systemd.js";
 import { buildGatewayConnectionDetails } from "../gateway/call.js";
 import { resolveClawdbotPackageRoot } from "../infra/clawdbot-root.js";
 import type { RuntimeEnv } from "../runtime.js";
@@ -210,24 +211,31 @@ export async function doctorCommand(
     process.platform === "linux" &&
     resolveMode(cfg) === "local"
   ) {
-    const service = resolveGatewayService();
-    let loaded = false;
-    try {
-      loaded = await service.isLoaded({ env: process.env });
+    const systemdScope = resolveSystemdScope(
+      process.env as Record<string, string | undefined>,
+    );
+    if (systemdScope === "system") {
+      // System services do not use user linger.
+    } else {
+      const service = resolveGatewayService();
+      let loaded = false;
+      try {
+        loaded = await service.isLoaded({ env: process.env });
     } catch {
       loaded = false;
     }
-    if (loaded) {
-      await ensureSystemdUserLingerInteractive({
-        runtime,
-        prompter: {
-          confirm: async (p) => prompter.confirm(p),
-          note,
-        },
-        reason:
-          "Gateway runs as a systemd user service. Without lingering, systemd stops the user session on logout/idle and kills the Gateway.",
-        requireConfirm: true,
-      });
+      if (loaded) {
+        await ensureSystemdUserLingerInteractive({
+          runtime,
+          prompter: {
+            confirm: async (p) => prompter.confirm(p),
+            note,
+          },
+          reason:
+            "Gateway runs as a systemd user service. Without lingering, systemd stops the user session on logout/idle and kills the Gateway.",
+          requireConfirm: true,
+        });
+      }
     }
   }
 
